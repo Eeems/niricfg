@@ -27,3 +27,11 @@ copyright = "Copyright (C) 2026 by Eeems"
 
 [tool.flet.app]
 path = "src"
+
+[tool.flet.compile]
+app = true
+packages = true
+
+[tool.flet.cleanup]
+app = true
+packages = true

@@ -25,7 +25,14 @@ jobs:
             --volume=$(pwd):/src \
             --workdir=/src \
             ghcr.io/eeems/arkes-builder:niricfg \
-            uvx flet build linux --yes --skip-flutter-doctor
+            uvx flet build linux \
+              --yes \
+              --skip-flutter-doctor
+          docker run \
+            --volume=$(pwd):/src \
+            --workdir=/src \
+            ghcr.io/eeems/arkes-builder:niricfg \
+            bash -c 'find build/linux/lib -type f | xargs strip'
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
