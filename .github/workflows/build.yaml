@@ -6,12 +6,14 @@ on:
     branches:
       - main
   push: *on-filter
+  release:
+    types: [released]
 
 permissions:
   packages: read
 
 jobs:
-  run:
+  build:
     name: Build executable
     runs-on: ubuntu-latest
     steps:
@@ -32,10 +34,34 @@ jobs:
             --volume=$(pwd):/src \
             --workdir=/src \
             ghcr.io/eeems/arkes-builder:niricfg \
-            bash -c 'find build/linux/lib -type f | xargs strip'
+            bash -c 'find build/linux/lib -type f | xargs strip -p --strip-unneeded'
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           path: build/linux
           name: niricfg
+  release:
+    name: Add ${{ matrix.artifact }} to release
+    if: github.repository == 'Eeems/niricfg' && github.event_name == 'release' && startsWith(github.ref, 'refs/tags')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout the Git repository
+        uses: actions/checkout@v4
+      - name: Download executable
+        id: download
+        uses: actions/download-artifact@v4
+        with:
+          name: niricfg
+          path: build/linux
+      - name: Upload to release
+        run: |
+          set -e
+          tar -czf niricfg.tar.gz -C build/linux .
+          gh release upload "$TAG" niricfg.tar.gz --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
