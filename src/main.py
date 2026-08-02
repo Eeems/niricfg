@@ -1,16 +1,13 @@
-import traceback
-import subprocess
 import json
 import os
+import subprocess
+import traceback
+from typing import Any, cast
 
 import flet as ft
 import kdl
-
-from typing import cast
-from typing import Any
-
-from settingspanel import SettingsPanel
 from monitor import Monitor
+from settingspanel import SettingsPanel
 
 CONFIG_PATH = os.path.expanduser("~/.config/niri/monitors.kdl")
 
@@ -283,6 +280,7 @@ def main(page: ft.Page):
         settings_panel.pos_x_input.value = str(x)
         settings_panel.pos_y_input.value = str(y)
         settings_panel.primary_button.disabled = monitor.primary
+        settings_panel.update()
         monitor.update()
         update()
 
