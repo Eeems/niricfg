@@ -1,9 +1,8 @@
-import traceback
 import subprocess
+import traceback
+from collections.abc import Callable
 
 import flet as ft
-
-from typing import Callable
 
 from monitor import Monitor
 
@@ -12,6 +11,7 @@ from monitor import Monitor
 class SettingsPanel(ft.Container):
     def __init__(
         self,
+        *,
         on_resolution_change: Callable[[tuple[int, int]], None],
         on_scale_change: Callable[[float], None],
         on_vrr_change: Callable[[bool], None],
@@ -20,53 +20,53 @@ class SettingsPanel(ft.Container):
         on_y_change: Callable[[int], None],
         on_apply: Callable[[Monitor, list[str]], None],
         on_reset: Callable[[Monitor], None],
-    ):
+    ) -> None:
         self._monitor: Monitor | None = None
-        self.on_resolution_change: Callable[[tuple[int, int]], None] = (
+        self._on_resolution_change: Callable[[tuple[int, int]], None] = (
             on_resolution_change
         )
-        self.on_scale_change: Callable[[float], None] = on_scale_change
-        self.on_vrr_change: Callable[[float], None] = on_vrr_change
-        self.on_make_primary_click: Callable[[Monitor], None] = on_make_primary_click
-        self.on_x_change: Callable[[int], None] = on_x_change
-        self.on_y_change: Callable[[int], None] = on_y_change
-        self.on_apply: Callable[[Monitor, list[str]], None] = on_apply
-        self.on_reset: Callable[[Monitor], None] = on_reset
-        self.resolution_dropdown = ft.Dropdown(
+        self._on_scale_change: Callable[[float], None] = on_scale_change
+        self._on_vrr_change: Callable[[bool], None] = on_vrr_change
+        self._on_make_primary_click: Callable[[Monitor], None] = on_make_primary_click
+        self._on_x_change: Callable[[int], None] = on_x_change
+        self._on_y_change: Callable[[int], None] = on_y_change
+        self._on_apply: Callable[[Monitor, list[str]], None] = on_apply
+        self._on_reset: Callable[[Monitor], None] = on_reset
+        self.resolution_dropdown: ft.Dropdown = ft.Dropdown(
             label="Resolution",
             options=[],
             width=200,
-            on_select=lambda _: self._on_resolution_change(),
+            on_select=lambda _: self.on_resolution_change(),
         )
-        self.scale_slider = ft.Slider(
+        self.scale_slider: ft.Slider = ft.Slider(
             min=0.5,
             max=3.0,
             value=1.0,
             divisions=20,
             width=200,
             label="Scale",
-            on_change=lambda _: self._on_slider_change(),
+            on_change=lambda _: self.on_slider_change(),
         )
-        self.scale_input = ft.TextField(
+        self.scale_input: ft.TextField = ft.TextField(
             label="Scale",
             width=80,
-            on_change=lambda _: self._on_scale_change(),
+            on_change=lambda _: self.on_scale_change(),
         )
-        self.vrr_switch = ft.Switch(
-            label="VRR", on_change=lambda _: self._on_vrr_change()
+        self.vrr_switch: ft.Switch = ft.Switch(
+            label="VRR", on_change=lambda _: self.on_vrr_change()
         )
-        self.primary_button = ft.Button(
-            "Make primary", on_click=lambda _: self._on_make_primary_click()
+        self.primary_button: ft.Button = ft.Button(
+            "Make primary", on_click=lambda _: self.on_make_primary_click()
         )
-        self.pos_x_input = ft.TextField(
+        self.pos_x_input: ft.TextField = ft.TextField(
             label="X",
             width=80,
-            on_change=lambda _: self._on_x_change(),
+            on_change=lambda _: self.on_x_change(),
         )
-        self.pos_y_input = ft.TextField(
+        self.pos_y_input: ft.TextField = ft.TextField(
             label="Y",
             width=80,
-            on_change=lambda e: self._on_y_change(),
+            on_change=lambda e: self.on_y_change(),
         )
         super().__init__(
             content=ft.Column(
@@ -113,10 +113,10 @@ class SettingsPanel(ft.Container):
         )
 
     def close(self) -> None:
-        self.visible = False
         self.monitor = None
+        self.visible: bool = self.monitor is not None
 
-    def apply(self):
+    def apply(self) -> None:
         if self.monitor is None:
             return
 
@@ -138,6 +138,7 @@ class SettingsPanel(ft.Container):
                     capture_output=True,
                     text=True,
                     timeout=5,
+                    check=False,
                 )
                 if result.returncode != 0:
                     errors.append(f"{self.monitor.name} Position: {result.stderr}")
@@ -160,6 +161,7 @@ class SettingsPanel(ft.Container):
                     capture_output=True,
                     text=True,
                     timeout=5,
+                    check=False,
                 )
                 if result.returncode != 0:
                     errors.append(f"{self.monitor.name} Scale: {result.stderr}")
@@ -176,6 +178,7 @@ class SettingsPanel(ft.Container):
                     capture_output=True,
                     text=True,
                     timeout=5,
+                    check=False,
                 )
                 if result.returncode != 0:
                     errors.append(f"{self.monitor.name} VRR: {result.stderr}")
@@ -192,6 +195,7 @@ class SettingsPanel(ft.Container):
                     capture_output=True,
                     text=True,
                     timeout=5,
+                    check=False,
                 )
                 if result.returncode != 0:
                     errors.append(f"{self.monitor.name} Mode: {result.stderr}")
@@ -203,13 +207,13 @@ class SettingsPanel(ft.Container):
         if not errors:
             self.monitor.apply()
 
-        self.on_apply(self.monitor, errors)
+        self._on_apply(self.monitor, errors)
 
     def reset(self) -> None:
         if self.monitor is None:
             return
 
-        self.monitor.reset()
+        self._on_reset(self.monitor)
         w, h = self.monitor.resolution
         self.resolution_dropdown.value = f"{w}x{h}"
         self.scale_slider.value = self.monitor.monitor_scale
@@ -219,7 +223,6 @@ class SettingsPanel(ft.Container):
         self.pos_x_input.value = str(x)
         self.pos_y_input.value = str(y)
         self.primary_button.disabled = self.monitor and self.monitor.primary
-        self.on_reset(self.monitor)
 
     @property
     def monitor(self) -> Monitor | None:
@@ -228,29 +231,32 @@ class SettingsPanel(ft.Container):
     @monitor.setter
     def monitor(self, monitor: Monitor | None) -> None:
         self._monitor = monitor
-        self.visible = True
+        self.visible = monitor is not None
 
-    def _on_resolution_change(self) -> None:
+    def on_resolution_change(self) -> None:
         if self.monitor is None:
             return
 
-        x, y = self.resolution_dropdown.value.split("x")
+        value = self.resolution_dropdown.value
+        assert value is not None
+        x, y = value.split("x")
         self.monitor.resolution = (int(x), int(y))
         self.monitor.pending.add("resolution")
-        self.on_resolution_change(self.monitor.resolution)
+        self._on_resolution_change(self.monitor.resolution)
 
-    def _on_slider_change(self) -> None:
+    def on_slider_change(self) -> None:
         if self.monitor is None:
             return
 
         self.scale_input.value = str(
             round(max(0.5, min(3.0, self.scale_slider.value or 1.0)), 1)
         )
-        self.monitor.monitor_scale = self.scale_slider.value
+        self.scale_input.update()
+        self.monitor.monitor_scale = self.scale_slider.value or 1.0
         self.monitor.pending.add("scale")
-        self.on_scale_change(self.monitor.monitor_scale)
+        self._on_scale_change(self.monitor.monitor_scale)
 
-    def _on_scale_change(self) -> None:
+    def on_scale_change(self) -> None:
         if self.monitor is None:
             return
 
@@ -263,27 +269,28 @@ class SettingsPanel(ft.Container):
             print(traceback.print_exc())
 
         self.scale_input.value = str(self.scale_slider.value)
-        self.monitor.monitor_scale = self.scale_slider.value
+        self.scale_slider.update()
+        self.monitor.monitor_scale = self.scale_slider.value or 1.0
         self.monitor.pending.add("scale")
-        self.on_scale_change(self.monitor.monitor_scale)
+        self._on_scale_change(self.monitor.monitor_scale)
 
-    def _on_vrr_change(self) -> None:
+    def on_vrr_change(self) -> None:
         if self.monitor is None:
             return
 
         self.monitor.vrr = self.vrr_switch.value
         self.monitor.pending.add("vrr")
-        self.on_vrr_change(self.monitor.vrr)
+        self._on_vrr_change(self.monitor.vrr)
 
-    def _on_make_primary_click(self) -> None:
+    def on_make_primary_click(self) -> None:
         if self.monitor is None:
             return
 
         self.monitor.pending.add("primary")
-        self.on_make_primary_click(self.monitor)
+        self._on_make_primary_click(self.monitor)
         self.primary_button.disabled = self.monitor and self.monitor.primary
 
-    def _on_x_change(self) -> None:
+    def on_x_change(self) -> None:
         if self.monitor is None:
             return
 
@@ -297,9 +304,9 @@ class SettingsPanel(ft.Container):
         _, y = self.monitor.position
         self.monitor.position = (x, y)
         self.monitor.pending.add("position")
-        self.on_x_change(x)
+        self._on_x_change(x)
 
-    def _on_y_change(self) -> None:
+    def on_y_change(self) -> None:
         if self.monitor is None:
             return
 
@@ -313,4 +320,4 @@ class SettingsPanel(ft.Container):
         x, _ = self.monitor.position
         self.monitor.position = (x, y)
         self.monitor.pending.add("position")
-        self.on_y_change(y)
+        self._on_y_change(y)

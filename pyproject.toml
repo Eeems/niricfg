@@ -4,6 +4,7 @@ version = "0.0.1"
 description = ""
 readme = "README.md"
 requires-python = ">=3.10"
+license = "MIT"
 authors = [
     { name = "Flet developer", email = "you@example.com" }
 ]
@@ -18,6 +19,7 @@ dev = [
     "flet-desktop-light>=0.81.0",
     "flet-web>=0.81.0",
 ]
+test = []
 
 [tool.flet]
 org = "codes.eeems"
@@ -35,3 +37,34 @@ packages = true
 [tool.flet.cleanup]
 app = true
 packages = true
+
+[tool.ruff]
+exclude = [".venv", "build"]
+
+[tool.ruff.lint]
+extend-select = [
+    "UP",
+    "PL",
+    "ANN",
+    "S",
+]
+ignore = [
+    "PLW0603",
+    "PLR2004",
+    "PLR0915",
+    "PLR0912",
+    "PLR0911",
+    "PLR6301",
+    "PLR0913",
+    "S101",
+    "S404",
+    "S603",
+    "S607",
+    "ANN401",
+    "ANN001",
+    "ANN003",
+    "BLE001"
+]
+
+[tool.pyright]
+exclude = [".venv", "build"]

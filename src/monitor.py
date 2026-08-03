@@ -1,32 +1,35 @@
-import flet as ft
+from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable
 from typing import override
+
+import flet as ft
 
 
 @ft.control
 class Monitor(ft.Container):
     def __init__(
         self,
+        *,
         name: str,
         resolution: tuple[int, int],
         position: tuple[int, int],
         scale: float,
         vrr: bool,
         on_click: ft.ControlEventHandler[ft.Container] | None,
-        is_primary: Callable[["Monitor"], bool],
-        is_selected: Callable[["Monitor"], bool],
-        on_layout: Callable[["Monitor"], None],
-    ):
+        is_primary: Callable[[Monitor], bool],
+        is_selected: Callable[[Monitor], bool],
+        on_layout: Callable[[Monitor], None],
+    ) -> None:
         self.name: str = name
-        self.is_primary: Callable[["Monitor"], bool] = is_primary
-        self.is_selected: Callable[["Monitor"], bool] = is_selected
-        self.on_layout: Callable[["Monitor"], None] = on_layout
+        self.is_primary: Callable[[Monitor], bool] = is_primary
+        self.is_selected: Callable[[Monitor], bool] = is_selected
+        self.on_layout: Callable[[Monitor], None] = on_layout
         self._resolution: tuple[int, int] = resolution
         self._orig_resolution: tuple[int, int] = self._resolution
         self._position: tuple[int, int] = position
         self._orig_position: tuple[int, int] = self._position
-        self._scale: float = self._clamp_scale(scale)
+        self._scale: float = self.clamp_scale(scale)
         self._orig_scale: float = self._scale
         self._vrr: bool = vrr
         self._orig_vrr: bool = self.vrr
@@ -34,10 +37,16 @@ class Monitor(ft.Container):
         w, h = resolution
         x, y = position
 
-        self.scale_text = ft.Text(f"s={scale}", size=9, color=self.text_color)
-        self.resolution_text = ft.Text(f"{w}x{h}", size=9, color=self.text_color)
-        self.position_text = ft.Text(f"({x}, {y})", size=9, color=self.text_color)
-        self.name_text = ft.Text(
+        self.scale_text: ft.Text = ft.Text(
+            f"s={self.monitor_scale}", size=9, color=self.text_color
+        )
+        self.resolution_text: ft.Text = ft.Text(
+            f"{w}x{h}", size=9, color=self.text_color
+        )
+        self.position_text: ft.Text = ft.Text(
+            f"({x}, {y})", size=9, color=self.text_color
+        )
+        self.name_text: ft.Text = ft.Text(
             f"{'* ' if self.primary else ''}{name}",
             size=11,
             weight=ft.FontWeight.BOLD,
@@ -61,26 +70,26 @@ class Monitor(ft.Container):
             padding=4,
             on_click=on_click,
         )
-        self._update()
+        self.update_layout()
 
-    def _update(self) -> None:
+    def update_layout(self) -> None:
         w, h = self.resolution
         x, y = self.position
-        self.left = x
-        self.top = y
-        self.width = int(w / self.monitor_scale)
-        self.height = int(h / self.monitor_scale)
+        self.left: float | None = x
+        self.top: float | None = y
+        self.width: float | None = int(w / self.monitor_scale)
+        self.height: float | None = int(h / self.monitor_scale)
         self.on_layout(self)
 
     @override
     def update(self) -> None:
-        self.bgcolor = self.bg_color
-        self.border = ft.Border.all(2, self.border_color)
+        self.bgcolor: str | None = self.bg_color
+        self.border: ft.Border | None = ft.Border.all(2, self.border_color)
         self.scale_text.color = self.resolution_text.color = (
             self.position_text.color
         ) = self.name_text.color = self.text_color
         self.name_text.value = f"{'* ' if self.primary else ''}{self.name}"
-        self._update()
+        self.update_layout()
         super().update()
 
     def reset(self) -> None:
@@ -97,6 +106,9 @@ class Monitor(ft.Container):
 
                 case "vrr":
                     self._vrr = self._orig_vrr
+
+                case _:
+                    pass
 
         self.pending.clear()
         self.update()
@@ -116,12 +128,19 @@ class Monitor(ft.Container):
                 case "vrr":
                     self._orig_vrr = self._vrr
 
+                case _:
+                    pass
+
         self.pending.clear()
         self.update()
 
     @property
     def vrr(self) -> bool:
         return self._vrr
+
+    @vrr.setter
+    def vrr(self, vrr: bool) -> None:
+        self._vrr = vrr
 
     @property
     def primary(self) -> bool:
@@ -140,7 +159,7 @@ class Monitor(ft.Container):
         self._resolution = resolution
         w, h = resolution
         self.resolution_text.value = f"{w}x{h}"
-        self._update()
+        self.update_layout()
 
     @property
     def position(self) -> tuple[int, int]:
@@ -151,20 +170,20 @@ class Monitor(ft.Container):
         self._position = position
         x, y = position
         self.position_text.value = f"({x},{y})"
-        self._update()
+        self.update_layout()
 
     @property
     def monitor_scale(self) -> float:
         return self._scale
 
     @monitor_scale.setter
-    def monitor_scale(self, scale: float | None) -> None:
-        self._scale = self._clamp_scale(scale)
+    def monitor_scale(self, scale: float) -> None:
+        self._scale = self.clamp_scale(scale)
         self.scale_text.value = f"s={self.monitor_scale}"
-        self._update()
+        self.update_layout()
 
-    def _clamp_scale(self, scale: float | None) -> float:
-        return round(max(0.5, min(3.0, scale or 1.0)), 1)
+    def clamp_scale(self, scale: float | None) -> float:
+        return round(max(0.5, min(3.0, scale if scale is not None else 1.0)), 1)
 
     @property
     def text_color(self) -> str:
