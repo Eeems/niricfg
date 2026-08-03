@@ -1,6 +1,7 @@
 # pyright: reportPrivateImportUsage=false
 import json
 import os
+import shutil
 import subprocess
 import tempfile
 import traceback
@@ -135,9 +136,15 @@ class MonitorsTab(ft.Container):
         self.status_text.update()
 
     def refresh(self) -> bool:
+        niri_path = shutil.which("niri")
+        if niri_path is None:
+            self.set_status("Error: niri executable not found", "red")
+            self.page.schedule_update()
+            return False
+
         try:
             result = subprocess.run(
-                ["niri", "msg", "--json", "outputs"],
+                [niri_path, "msg", "--json", "outputs"],
                 capture_output=True,
                 text=True,
                 timeout=5,
@@ -464,6 +471,10 @@ class MonitorsTab(ft.Container):
             try:
                 with os.fdopen(fd, "w") as f:
                     _ = f.write(kdl_config.print())
+                    f.flush()
+                    os.fsync(f.fileno())
+                if os.path.exists(CONFIG_PATH):
+                    os.chmod(tmp, os.stat(CONFIG_PATH).st_mode)
                 os.replace(tmp, CONFIG_PATH)
             except Exception:
                 try:

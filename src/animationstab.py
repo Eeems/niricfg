@@ -4,7 +4,7 @@ import os
 import re
 import tempfile
 import traceback
-from typing import ClassVar, Protocol, cast
+from typing import ClassVar, Iterator, Protocol, cast
 
 import flet as ft
 import kdl
@@ -341,6 +341,9 @@ class AnimationsTab(ft.Container):
             self.on_reset()
 
     def focus_keyboard(self) -> None:
+        self._held_modifiers.clear()
+        self._armed = False
+        self._reset_armed = False
         if self.page:
             _ = self.page.run_task(self._kb_listener.focus)
 
@@ -460,7 +463,7 @@ class AnimationsTab(ft.Container):
                     for child in node.nodes:
                         if child.name == name:
                             return self.parse_animation_node(child)
-        except Exception:
+        except (OSError, kdl.ParseError, ValueError):
             traceback.print_exc()
         return None
 
@@ -567,7 +570,7 @@ class AnimationsTab(ft.Container):
         try:
             with open(self.resolve_preset_path(path)) as f:
                 text = f.read()
-        except Exception:
+        except (OSError, ValueError):
             traceback.print_exc()
             return None
         return self._find_node_text(name, text)
@@ -575,10 +578,10 @@ class AnimationsTab(ft.Container):
     def base_config(self, name: str) -> AnimationConfig | None:
         choice = self.dropdowns[name].value
         if choice in (None, "", "__default__"):
-            return NIRI_DEFAULTS[name]
+            return dict(NIRI_DEFAULTS[name])
         if choice == "off":
             return None
-        return self.preset_configs.get(name, {}).get(choice) or NIRI_DEFAULTS[name]
+        return self.preset_configs.get(name, {}).get(choice) or dict(NIRI_DEFAULTS[name])
 
     def current_config(self, name: str) -> AnimationConfig:
         if (self.kind_inputs[name].value or "easing") == "spring":
@@ -909,20 +912,16 @@ class AnimationsTab(ft.Container):
             return None
         return [c.print().rstrip("\n") for c in children]
 
-    def _filtered_body_lines(self, lines: list[str]) -> list[str]:
-        kept: list[str] = []
+    def _shader_string_lines(self, lines: list[str]) -> Iterator[tuple[str, bool]]:
+        """Yield each line with whether it is inside a custom-shader raw string."""
         in_string = False
         raw_hashes = 0
-        i = 0
-        n = len(lines)
-        while i < n:
-            line = lines[i]
+        for line in lines:
             stripped = line.strip()
             if in_string:
-                kept.append(line)
+                yield line, True
                 if stripped.endswith('"' + "#" * raw_hashes):
                     in_string = False
-                i += 1
                 continue
             if (
                 re.match(r"custom-shader\s", stripped)
@@ -931,15 +930,26 @@ class AnimationsTab(ft.Container):
             ):
                 raw_hashes = self._raw_hash_count(stripped)
                 in_string = True
+            yield line, in_string
+
+    def _filtered_body_lines(self, lines: list[str]) -> list[str]:
+        kept: list[str] = []
+        states = list(self._shader_string_lines(lines))
+        i = 0
+        n = len(states)
+        while i < n:
+            line, in_string = states[i]
+            if in_string:
                 kept.append(line)
                 i += 1
                 continue
+            stripped = line.strip()
             if re.match(r"(?:duration-ms|curve|spring|off)(?:[ \t{]|$)", stripped):
                 if "{" in stripped:
                     depth = stripped.count("{") - stripped.count("}")
                     i += 1
                     while i < n and depth > 0:
-                        depth += lines[i].count("{") - lines[i].count("}")
+                        depth += states[i][0].count("{") - states[i][0].count("}")
                         i += 1
                     continue
                 i += 1
@@ -1011,23 +1021,9 @@ class AnimationsTab(ft.Container):
 
     def _strip_shader_block(self, lines: list[str]) -> list[str]:
         kept: list[str] = []
-        in_string = False
-        raw_hashes = 0
-        for line in lines:
-            stripped = line.strip()
-            if in_string:
-                if stripped.endswith('"' + "#" * raw_hashes):
-                    in_string = False
-                continue
-            if (
-                re.match(r"custom-shader\s", stripped)
-                and ('r"' in stripped or "r#" in stripped)
-                and stripped.count('"') % 2 == 1
-            ):
-                raw_hashes = self._raw_hash_count(stripped)
-                in_string = True
-                continue
-            kept.append(line)
+        for line, in_string in self._shader_string_lines(lines):
+            if not in_string:
+                kept.append(line)
         return kept
 
     def _parse_node_values(self, name: str, body: list[str]) -> AnimationConfig | None:
@@ -1052,7 +1048,7 @@ class AnimationsTab(ft.Container):
             try:
                 with open(path) as f:
                     text = f.read()
-            except Exception:
+            except (OSError, ValueError):
                 traceback.print_exc()
                 text = ""
             if text:
@@ -1087,7 +1083,7 @@ class AnimationsTab(ft.Container):
                                     selections[name] = preset
 
                     for name in AnimationsTab.ANIMATIONS:
-                        node_text = self._find_node_text(name, text, 1)
+                        node_text = self._find_node_text(name, block, 1)
                         if node_text is None:
                             continue
                         body = self._node_body_lines(node_text)
@@ -1096,7 +1092,7 @@ class AnimationsTab(ft.Container):
                             continue
                         try:
                             overrides[name] = self._parse_node_values(name, body)
-                        except Exception:
+                        except (kdl.ParseError, ValueError):
                             traceback.print_exc()
                             self._parse_errors.add(name)
 
@@ -1122,7 +1118,7 @@ class AnimationsTab(ft.Container):
             with open(path) as f:
                 doc = kdl.parse(f.read())
 
-        except Exception:
+        except (OSError, kdl.ParseError, ValueError):
             traceback.print_exc()
             return None
 
@@ -1228,14 +1224,14 @@ class AnimationsTab(ft.Container):
                 if os.path.exists(target):
                     os.chmod(tmp, os.stat(target).st_mode)
                 os.replace(tmp, target)
-            except Exception:
+            except OSError:
                 try:
                     os.unlink(tmp)
                 except OSError:
                     pass
                 raise
 
-        except Exception as e:
+        except OSError as e:
             traceback.print_exc()
             self.set_status(f"Error writing KDL config: {e}", "red")
             self.update()

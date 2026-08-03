@@ -23,14 +23,14 @@ jobs:
       - name: Build
         run: |
           set -e
-          docker run \
+          podman run \
             --volume=$(pwd):/src \
             --workdir=/src \
             ghcr.io/eeems/arkes-builder:niricfg \
             uvx flet build linux \
               --yes \
               --skip-flutter-doctor
-          docker run \
+          podman run \
             --volume=$(pwd):/src \
             --workdir=/src \
             ghcr.io/eeems/arkes-builder:niricfg \

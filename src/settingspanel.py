@@ -115,6 +115,7 @@ class SettingsPanel(ft.Container):
     def close(self) -> None:
         self.monitor = None
         self.visible: bool = self.monitor is not None
+        self.update()
 
     def apply(self) -> None:
         if self.monitor is None:
@@ -248,11 +249,9 @@ class SettingsPanel(ft.Container):
         if self.monitor is None:
             return
 
-        self.scale_input.value = str(
-            round(max(0.5, min(3.0, self.scale_slider.value or 1.0)), 1)
-        )
+        self.scale_input.value = str(self.monitor.clamp_scale(self.scale_slider.value))
         self.scale_input.update()
-        self.monitor.monitor_scale = self.scale_slider.value or 1.0
+        self.monitor.monitor_scale = self.scale_slider.value
         self.monitor.pending.add("scale")
         self._on_scale_change(self.monitor.monitor_scale)
 
@@ -261,16 +260,16 @@ class SettingsPanel(ft.Container):
             return
 
         try:
-            self.scale_slider.value = round(
-                max(0.5, min(3.0, float(self.scale_input.value))), 1
-            )
+            scale = float(self.scale_input.value)
 
         except ValueError:
             print(traceback.print_exc())
+            return
 
+        self.scale_slider.value = self.monitor.clamp_scale(scale)
         self.scale_input.value = str(self.scale_slider.value)
         self.scale_slider.update()
-        self.monitor.monitor_scale = self.scale_slider.value or 1.0
+        self.monitor.monitor_scale = self.scale_slider.value
         self.monitor.pending.add("scale")
         self._on_scale_change(self.monitor.monitor_scale)
 
