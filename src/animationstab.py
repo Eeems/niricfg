@@ -329,7 +329,9 @@ class AnimationsTab(ft.Container):
         modifier = self._modifier_name(e.key)
         if modifier is not None:
             self._held_modifiers.discard(modifier)
-        elif e.key.lower() == "s" and self._armed and self._held_modifiers == {"control"}:
+        elif (
+            e.key.lower() == "s" and self._armed and self._held_modifiers == {"control"}
+        ):
             self._armed = False
             self.on_apply()
         elif (
@@ -541,18 +543,23 @@ class AnimationsTab(ft.Container):
             if text[i] == '"':
                 i = self._skip_string(text, i)
                 continue
+
             if text[i] == "/":
                 j = self._skip_comment(text, i)
                 if j is not None:
                     i = j
                     continue
+
             if text[i] == "{":
                 depth += 1
+
             elif text[i] == "}":
                 depth -= 1
                 if depth == 0:
                     return i
+
             i += 1
+
         return None
 
     def _find_node_text(self, name: str, text: str, depth: int = 1) -> str | None:
@@ -560,28 +567,37 @@ class AnimationsTab(ft.Container):
         for m in pattern.finditer(text):
             if self._brace_depth(text[: m.start()]) != depth:
                 continue
+
             close_idx = self._find_matching_brace(text, m.end() - 1)
             if close_idx is None:
                 continue
+
             return text[m.start() : close_idx + 1]
+
         return None
 
     def extract_animation_node_text(self, name: str, path: str) -> str | None:
         try:
             with open(self.resolve_preset_path(path)) as f:
                 text = f.read()
+
         except (OSError, ValueError):
             traceback.print_exc()
             return None
+
         return self._find_node_text(name, text)
 
     def base_config(self, name: str) -> AnimationConfig | None:
         choice = self.dropdowns[name].value
         if choice in (None, "", "__default__"):
             return dict(NIRI_DEFAULTS[name])
+
         if choice == "off":
             return None
-        return self.preset_configs.get(name, {}).get(choice) or dict(NIRI_DEFAULTS[name])
+
+        return self.preset_configs.get(name, {}).get(choice) or dict(
+            NIRI_DEFAULTS[name]
+        )
 
     def current_config(self, name: str) -> AnimationConfig:
         if (self.kind_inputs[name].value or "easing") == "spring":
@@ -591,6 +607,7 @@ class AnimationsTab(ft.Container):
                 "stiffness": self.parse_int(self.stiffness_inputs[name].value),
                 "epsilon": self.parse_float(self.epsilon_inputs[name].value),
             }
+
         return {
             "kind": "easing",
             "duration_ms": self.parse_int(self.duration_inputs[name].value),
@@ -599,9 +616,7 @@ class AnimationsTab(ft.Container):
         }
 
     def comparable(self, config: AnimationConfig | None) -> AnimationConfig | None:
-        if config is None:
-            return None
-        return dict(config)
+        return None if config is None else dict(config)
 
     def fill_fields(self, name: str, config: AnimationConfig | None) -> None:
         if config is None:
@@ -626,6 +641,7 @@ class AnimationsTab(ft.Container):
                 "" if stiffness is None else str(stiffness)
             )
             self.epsilon_inputs[name].value = "" if epsilon is None else str(epsilon)
+
         else:
             duration = config.get("duration_ms")
             curve = config.get("curve") or "ease-out-expo"
@@ -640,6 +656,7 @@ class AnimationsTab(ft.Container):
             self.bezier_inputs[name].value = (
                 "" if not bezier else " ".join(str(b) for b in bezier)
             )
+
         self.update_field_visibility(name)
 
     def update_field_visibility(self, name: str) -> None:
@@ -671,13 +688,17 @@ class AnimationsTab(ft.Container):
         ):
             self.duration_inputs[name].value = "250"
             self.curve_inputs[name].value = "ease-out-cubic"
+
         elif self.kind_inputs[name].value == "spring":
             if not self.damping_inputs[name].value:
                 self.damping_inputs[name].value = str(SPRING_DAMPING_RATIO)
+
             if not self.stiffness_inputs[name].value:
                 self.stiffness_inputs[name].value = str(SPRING_STIFFNESS)
+
             if not self.epsilon_inputs[name].value:
                 self.epsilon_inputs[name].value = str(SPRING_EPSILON)
+
         self.update_field_visibility(name)
         self.mark_pending()
 
@@ -862,13 +883,16 @@ class AnimationsTab(ft.Container):
                 if not isinstance(value, (int, float)):
                     field.error = None
                     continue
+
                 out_of_range = value <= minimum if positive else value < minimum
                 field.error = (
                     f"Must be {'> 0' if positive else '>= 0'}" if out_of_range else None
                 )
                 bad = bad or out_of_range
+
             if bad:
                 invalid.append(name)
+
         return invalid
 
     def build_override_children(self, config: AnimationConfig) -> list[kdl.Node] | None:
@@ -1130,9 +1154,11 @@ class AnimationsTab(ft.Container):
                 if child.name == "slowdown" and child.args:
                     try:
                         return float(cast(int | float | str, child.args[0]))
+
                     except (TypeError, ValueError):
                         traceback.print_exc()
                         return None
+
         return None
 
     def write_animations_kdl(self) -> bool:
@@ -1145,6 +1171,7 @@ class AnimationsTab(ft.Container):
             )
             self.update()
             return False
+
         if self._parse_errors:
             self.set_status(
                 "Unparseable nodes, not written: "
@@ -1153,6 +1180,7 @@ class AnimationsTab(ft.Container):
             )
             self.update()
             return False
+
         indent = "    "
 
         lines: list[str] = ["animations {"]
@@ -1160,7 +1188,7 @@ class AnimationsTab(ft.Container):
             lines.append(f"{indent}off")
         lines.append(f"{indent}slowdown {round(self.slowdown_value, 2)}")
 
-        invalid: list[str] = []
+        invalid: list[tuple[str, str]] = []
         for name in AnimationsTab.ANIMATIONS:
             choice = selections.get(name)
             if choice == "off":
@@ -1173,15 +1201,18 @@ class AnimationsTab(ft.Container):
             if choice not in (None, "off"):
                 text = self.extract_animation_node_text(name, choice)
                 if text is None:
-                    invalid.append(name)
+                    invalid.append((name, "missing animation node text"))
                     continue
+
                 if config is not None:
                     node_text = self.override_animation_node_text(name, text, config)
                     if node_text is None:
-                        invalid.append(name)
+                        invalid.append((name, "Empty node text"))
                         continue
+
                 else:
                     node_text = self._indent_block(text, indent)
+
                 lines.append(f"{indent}// preset: {choice}")
                 lines.append(node_text)
                 continue
@@ -1189,19 +1220,22 @@ class AnimationsTab(ft.Container):
             if config is not None:
                 children = self._override_children_lines(config)
                 if children is None:
-                    invalid.append(name)
+                    invalid.append((name, "Missing node children"))
                     continue
+
                 lines.append(f"{indent}{name} {{")
                 for child in children:
                     lines.append(f"{indent}{indent}{child}")
-                lines.append(f"{indent}}}")
-        lines.append("}")
 
+                lines.append(f"{indent}}}")
+
+        lines.append("}")
         content = "\n".join(lines) + "\n"
 
         if invalid:
             self.set_status(
-                f"Incomplete override, not written: {', '.join(invalid)}", "red"
+                f"Invalid animation: {', '.join([': '.join(x) for x in invalid])}",
+                "red",
             )
             self.update()
             return False
