@@ -4,19 +4,23 @@ import os
 import re
 import tempfile
 import traceback
-from typing import ClassVar, Iterator, Protocol, cast
+from collections.abc import Iterator
+from typing import (
+    ClassVar,
+    Protocol,
+    cast,
+)
 
 import flet as ft
 import kdl
 
 AnimationConfig = dict[str, str | int | float | list[float] | None]
 
-# Generic spring defaults from niri, used when a spring node omits a property.
+# Generic spring defaults from niri
 SPRING_DAMPING_RATIO = 1.0
 SPRING_STIFFNESS = 1000
 SPRING_EPSILON = 0.0001
 
-# Niri config directory, honoring XDG_CONFIG_HOME with ~/.config fallback.
 NIRI_CONFIG_DIR = os.path.join(
     os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config"),
     "niri",
@@ -155,7 +159,6 @@ class AnimationsTab(ft.Container):
         self.spring_rows: dict[str, ft.Row] = {}
         self.preset_configs: dict[str, dict[str, AnimationConfig | None]] = {}
         self._parse_errors: set[str] = set()
-
         for name in AnimationsTab.ANIMATIONS:
             self.dropdowns[name] = ft.Dropdown(
                 options=[],
@@ -258,12 +261,10 @@ class AnimationsTab(ft.Container):
             scroll=ft.ScrollMode.AUTO,
             expand=True,
         )
-
         self._armed: bool = False
         self._reset_armed: bool = False
         self._held_modifiers: set[str] = set()
         self._kb_listener: ft.KeyboardListener
-
         kb_listener = ft.KeyboardListener(
             autofocus=True,
             on_key_down=self.on_key_down,
@@ -295,7 +296,6 @@ class AnimationsTab(ft.Container):
             ),
         )
         self._kb_listener = kb_listener
-
         super().__init__(
             content=kb_listener,
             expand=True,
@@ -307,6 +307,7 @@ class AnimationsTab(ft.Container):
         for name in ("control", "shift", "alt", "meta"):
             if name in lower:
                 return name
+
         return None
 
     def on_key_down(self, e: ft.KeyDownEvent) -> None:
@@ -315,32 +316,40 @@ class AnimationsTab(ft.Container):
             self._held_modifiers.add(modifier)
             self._armed = False
             self._reset_armed = False
-        elif e.key.lower() == "s":
-            self._armed = self._held_modifiers == {"control"}
-            self._reset_armed = False
-        elif e.key.lower() == "z":
-            self._reset_armed = self._held_modifiers == {"control"}
-            self._armed = False
-        else:
-            self._armed = False
-            self._reset_armed = False
+            return
+
+        match e.key.lower():
+            case "s":
+                self._armed = self._held_modifiers == {"control"}
+                self._reset_armed = False
+
+            case "z":
+                self._reset_armed = self._held_modifiers == {"control"}
+                self._armed = False
+
+            case _:
+                self._armed = False
+                self._reset_armed = False
 
     def on_key_up(self, e: ft.KeyUpEvent) -> None:
         modifier = self._modifier_name(e.key)
         if modifier is not None:
             self._held_modifiers.discard(modifier)
-        elif (
-            e.key.lower() == "s" and self._armed and self._held_modifiers == {"control"}
-        ):
-            self._armed = False
-            self.on_apply()
-        elif (
-            e.key.lower() == "z"
-            and self._reset_armed
-            and self._held_modifiers == {"control"}
-        ):
-            self._reset_armed = False
-            self.on_reset()
+            return
+
+        match e.key.lower():
+            case "s":
+                if self._armed and self._held_modifiers == {"control"}:
+                    self._armed = False
+                    self.on_apply()
+
+            case "z":
+                if self._reset_armed and self._held_modifiers == {"control"}:
+                    self._reset_armed = False
+                    self.on_reset()
+
+            case _:
+                pass
 
     def focus_keyboard(self) -> None:
         self._held_modifiers.clear()
@@ -353,6 +362,7 @@ class AnimationsTab(ft.Container):
         width = self.page.width if self.page else None
         if not width:
             return
+
         available = width - 20  # container padding
         cols = int(
             (available + AnimationsTab.CARD_SPACING)
@@ -379,20 +389,26 @@ class AnimationsTab(ft.Container):
     def parse_float(self, value: str | None) -> float | None:
         if value is None or str(value).strip() == "":
             return None
+
         try:
             result = float(value)
+
         except ValueError:
             traceback.print_exc()
             return None
+
         if not math.isfinite(result):
             return None
+
         return result
 
     def parse_int(self, value: str | None) -> int | None:
         if value is None or str(value).strip() == "":
             return None
+
         try:
             return int(value)
+
         except ValueError:
             traceback.print_exc()
             return None
@@ -401,11 +417,14 @@ class AnimationsTab(ft.Container):
         value = self.bezier_inputs[name].value
         if not value:
             return None
+
         parts = value.split()
         if len(parts) != 4:
             return None
+
         try:
             return [float(p) for p in parts]
+
         except ValueError:
             traceback.print_exc()
             return None
@@ -443,30 +462,36 @@ class AnimationsTab(ft.Container):
         }
         if duration is not None and duration.args:
             config["duration_ms"] = int(cast(int | float | str, duration.args[0]))
+
         if curve is not None and curve.args:
             config["curve"] = str(curve.args[0])
             if config["curve"] == "cubic-bezier" and len(curve.args) >= 5:
                 config["bezier"] = [
                     float(a) for a in cast(list[int | float | str], curve.args[1:5])
                 ]
+
         return config
 
     def resolve_preset_path(self, path: str) -> str:
         if os.path.isabs(path):
             return path
+
         return os.path.join(NIRI_CONFIG_DIR, path)
 
     def preset_config(self, name: str, path: str) -> AnimationConfig | None:
         try:
             with open(self.resolve_preset_path(path)) as f:
                 doc = kdl.parse(f.read())
+
             for node in cast(list[KDLNode], doc.nodes):
                 if node.name == "animations":
                     for child in node.nodes:
                         if child.name == name:
                             return self.parse_animation_node(child)
+
         except (OSError, kdl.ParseError, ValueError):
             traceback.print_exc()
+
         return None
 
     def _skip_string(self, text: str, quote_idx: int) -> int:
@@ -476,8 +501,10 @@ class AnimationsTab(ft.Container):
         while j >= 0 and text[j] == "#":
             hashes += 1
             j -= 1
+
         if j >= 0 and text[j] in ("r", "R"):
             raw = True
+
         n = len(text)
         i = quote_idx + 1
         while i < n:
@@ -486,33 +513,43 @@ class AnimationsTab(ft.Container):
                     k = i + 1
                     while k < n and text[k] == "#":
                         k += 1
+
                     if k - i - 1 == hashes and (
                         k == n or text[k] in (" ", "\t", "\n", "\r", "}", ";")
                     ):
                         return k
+
                     i += 1
                     continue
+
                 if i > 0:
                     k = i - 1
                     while k >= 0 and text[k] == "\\":
                         k -= 1
+
                     if (i - 1 - k) % 2 == 1:
                         i += 1
                         continue
+
                 return i + 1
+
             i += 1
+
         return n
 
     def _skip_comment(self, text: str, i: int) -> int | None:
         n = len(text)
         if i + 1 >= n or text[i] != "/":
             return None
+
         if text[i + 1] == "/":
             j = text.find("\n", i)
             return j if j != -1 else n
+
         if text[i + 1] == "*":
             j = text.find("*/", i + 2)
             return j + 2 if j != -1 else n
+
         return None
 
     def _brace_depth(self, text: str) -> int:
@@ -523,16 +560,21 @@ class AnimationsTab(ft.Container):
             if text[i] == '"':
                 i = self._skip_string(text, i)
                 continue
+
             if text[i] == "/":
                 j = self._skip_comment(text, i)
                 if j is not None:
                     i = j
                     continue
+
             if text[i] == "{":
                 depth += 1
+
             elif text[i] == "}":
                 depth -= 1
+
             i += 1
+
         return depth
 
     def _find_matching_brace(self, text: str, open_idx: int) -> int | None:
@@ -652,6 +694,7 @@ class AnimationsTab(ft.Container):
                 dropdown.options.append(
                     ft.dropdown.Option(key=str(curve), text=str(curve))
                 )
+
             dropdown.value = str(curve)
             self.bezier_inputs[name].value = (
                 "" if not bezier else " ".join(str(b) for b in bezier)
@@ -675,7 +718,6 @@ class AnimationsTab(ft.Container):
         self.mark_pending()
 
     def on_animation_select(self, name: str, _e: ft.Event[ft.Dropdown]) -> None:
-        # Picking a preset resets the override fields to that preset's values.
         self.fill_fields(name, self.base_config(name))
         self.set_disabled_states()
         self.mark_pending()
@@ -711,6 +753,7 @@ class AnimationsTab(ft.Container):
         for ctrl in [self.slowdown_slider, self.slowdown_input]:
             ctrl.disabled = global_off
             ctrl.update()
+
         for name, dropdown in self.dropdowns.items():
             off = global_off or (dropdown.value == "off")
             is_default = dropdown.value in (None, "", "__default__")
@@ -730,9 +773,6 @@ class AnimationsTab(ft.Container):
         self.preset_configs = {}
         for name in AnimationsTab.ANIMATIONS:
             by_name: dict[str, str] = {}
-            # System dir first, user dir last, so a user preset with the same
-            # filename wins over the system one. System presets keep their
-            # absolute path; user presets use a path relative to animations.kdl.
             for preset_dir, is_system in (
                 ("/usr/share/niri/animations", True),
                 (os.path.join(NIRI_CONFIG_DIR, "animations"), False),
@@ -740,12 +780,15 @@ class AnimationsTab(ft.Container):
                 anim_dir = os.path.join(preset_dir, name)
                 if not os.path.isdir(anim_dir):
                     continue
+
                 for f in sorted(os.listdir(anim_dir)):
                     if f.endswith(".kdl"):
-                        if is_system:
-                            by_name[f] = os.path.join(anim_dir, f)
-                        else:
-                            by_name[f] = os.path.join("animations", name, f)
+                        by_name[f] = (
+                            os.path.join(anim_dir, f)
+                            if is_system
+                            else os.path.join("animations", name, f)
+                        )
+
             presets[name] = list(by_name.values())
             self.preset_configs[name] = {
                 path: self.preset_config(name, path) for path in by_name.values()
@@ -768,6 +811,7 @@ class AnimationsTab(ft.Container):
             for path in presets.get(name, []):
                 label = os.path.splitext(os.path.basename(path))[0]
                 options.append(ft.dropdown.Option(key=path, text=label))
+
             dropdown.options = options
 
     def set_state(
@@ -780,6 +824,7 @@ class AnimationsTab(ft.Container):
         self.global_off_switch.value = animations_off
         if slowdown is None:
             slowdown = 1.0
+
         value = round(
             max(AnimationsTab.SLOWDOWN_MIN, min(AnimationsTab.SLOWDOWN_MAX, slowdown)),
             2,
@@ -791,13 +836,17 @@ class AnimationsTab(ft.Container):
             choice = selections.get(name)
             if choice in available:
                 dropdown.value = choice
+
             else:
                 dropdown.value = "__default__"
+
         for name in AnimationsTab.ANIMATIONS:
             config = overrides.get(name)
             if config is None:
                 config = self.base_config(name)
+
             self.fill_fields(name, config)
+
         self.set_disabled_states()
 
     @property
@@ -847,10 +896,13 @@ class AnimationsTab(ft.Container):
             value = dropdown.value
             if value in (None, "", "__default__"):
                 result[name] = None
+
             elif value == "off":
                 result[name] = "off"
+
             else:
                 result[name] = value
+
         return result
 
     def overrides(self) -> dict[str, AnimationConfig]:
@@ -859,15 +911,17 @@ class AnimationsTab(ft.Container):
         for name in AnimationsTab.ANIMATIONS:
             if selections.get(name) == "off":
                 continue
+
             base = self.base_config(name)
             current = self.current_config(name)
             if self.comparable(current) == self.comparable(base):
                 continue
+
             result[name] = current
+
         return result
 
     def _validate_overrides(self, overrides: dict[str, AnimationConfig]) -> list[str]:
-        """Set error text on defined inputs whose values are out of range."""
         invalid: list[str] = []
         for name in AnimationsTab.ANIMATIONS:
             config = overrides.get(name)
@@ -903,6 +957,7 @@ class AnimationsTab(ft.Container):
                 config.get("epsilon"),
             ):
                 return None
+
             return [
                 kdl.Node(
                     name="spring",
@@ -917,17 +972,22 @@ class AnimationsTab(ft.Container):
         nodes: list[kdl.Node] = []
         if config.get("duration_ms") is not None:
             nodes.append(kdl.Node(name="duration-ms", args=[config["duration_ms"]]))
+
         curve = config.get("curve")
         if curve:
             if curve == "cubic-bezier":
                 bezier = cast(list[float] | None, config.get("bezier"))
                 if not bezier or len(bezier) != 4:
                     return None
+
                 nodes.append(kdl.Node(name="curve", args=["cubic-bezier", *bezier]))
+
             else:
                 nodes.append(kdl.Node(name="curve", args=[curve]))
+
         if not nodes:
             return None
+
         return nodes
 
     def _override_children_lines(self, config: AnimationConfig) -> list[str] | None:
@@ -937,7 +997,6 @@ class AnimationsTab(ft.Container):
         return [c.print().rstrip("\n") for c in children]
 
     def _shader_string_lines(self, lines: list[str]) -> Iterator[tuple[str, bool]]:
-        """Yield each line with whether it is inside a custom-shader raw string."""
         in_string = False
         raw_hashes = 0
         for line in lines:
@@ -946,7 +1005,9 @@ class AnimationsTab(ft.Container):
                 yield line, True
                 if stripped.endswith('"' + "#" * raw_hashes):
                     in_string = False
+
                 continue
+
             if (
                 re.match(r"custom-shader\s", stripped)
                 and ('r"' in stripped or "r#" in stripped)
@@ -954,6 +1015,7 @@ class AnimationsTab(ft.Container):
             ):
                 raw_hashes = self._raw_hash_count(stripped)
                 in_string = True
+
             yield line, in_string
 
     def _filtered_body_lines(self, lines: list[str]) -> list[str]:
@@ -967,6 +1029,7 @@ class AnimationsTab(ft.Container):
                 kept.append(line)
                 i += 1
                 continue
+
             stripped = line.strip()
             if re.match(r"(?:duration-ms|curve|spring|off)(?:[ \t{]|$)", stripped):
                 if "{" in stripped:
@@ -975,11 +1038,15 @@ class AnimationsTab(ft.Container):
                     while i < n and depth > 0:
                         depth += states[i][0].count("{") - states[i][0].count("}")
                         i += 1
+
                     continue
+
                 i += 1
                 continue
+
             kept.append(line)
             i += 1
+
         return kept
 
     def _node_body_lines(self, text: str) -> list[str]:
@@ -993,10 +1060,12 @@ class AnimationsTab(ft.Container):
         lines = text.splitlines()
         if not lines:
             return None
+
         indent = "    "
         override = self._override_children_lines(config)
         if override is None:
             return None
+
         body = [f"{indent * 2}{line}" for line in override]
         body.extend(self._filtered_body_lines(self._node_body_lines(text)))
         return "\n".join([f"{indent}{name} {{", *body, f"{indent}}}"])
@@ -1005,6 +1074,7 @@ class AnimationsTab(ft.Container):
         lines = text.splitlines()
         if lines:
             lines[0] = lines[0].lstrip()
+
         return "\n".join(indent + line for line in lines)
 
     def _depth_lines(self, text: str) -> list[tuple[int, str]]:
@@ -1018,25 +1088,33 @@ class AnimationsTab(ft.Container):
             if ch == '"':
                 i = self._skip_string(text, i)
                 continue
+
             if ch == "/":
                 j = self._skip_comment(text, i)
                 if j is not None:
                     i = j
                     continue
+
             if ch in "\n\r":
                 result.append((depth, text[line_start:i]))
                 if ch == "\r" and i + 1 < n and text[i + 1] == "\n":
                     i += 1
+
                 line_start = i + 1
                 i += 1
                 continue
+
             if ch == "{":
                 depth += 1
+
             elif ch == "}":
                 depth -= 1
+
             i += 1
+
         if line_start < n:
             result.append((depth, text[line_start:]))
+
         return result
 
     def _raw_hash_count(self, line: str) -> int:
@@ -1048,6 +1126,7 @@ class AnimationsTab(ft.Container):
         for line, in_string in self._shader_string_lines(lines):
             if not in_string:
                 kept.append(line)
+
         return kept
 
     def _parse_node_values(self, name: str, body: list[str]) -> AnimationConfig | None:
@@ -1072,13 +1151,16 @@ class AnimationsTab(ft.Container):
             try:
                 with open(path) as f:
                     text = f.read()
+
             except (OSError, ValueError):
                 traceback.print_exc()
                 text = ""
+
             if text:
                 for depth, line in self._depth_lines(text):
                     if depth != 0:
                         continue
+
                     m = re.match(r'include\s+"([^"]+)"', line.strip())
                     if m:
                         for name in AnimationsTab.ANIMATIONS:
@@ -1090,16 +1172,20 @@ class AnimationsTab(ft.Container):
                     for depth, line in self._depth_lines(block):
                         if depth != 1:
                             continue
+
                         stripped = line.strip()
                         if stripped == "off":
                             animations_off = True
+
                         elif stripped.startswith("slowdown "):
                             m = re.match(r"slowdown\s+([0-9.]+)", stripped)
                             if m:
                                 try:
                                     slowdown = float(m.group(1))
+
                                 except ValueError:
                                     traceback.print_exc()
+
                         elif stripped.startswith("// preset: "):
                             preset = stripped[len("// preset: ") :].strip()
                             for name in AnimationsTab.ANIMATIONS:
@@ -1110,12 +1196,15 @@ class AnimationsTab(ft.Container):
                         node_text = self._find_node_text(name, block, 1)
                         if node_text is None:
                             continue
+
                         body = self._node_body_lines(node_text)
                         if any(line.strip() == "off" for line in body):
                             selections[name] = "off"
                             continue
+
                         try:
                             overrides[name] = self._parse_node_values(name, body)
+
                         except (kdl.ParseError, ValueError):
                             traceback.print_exc()
                             self._parse_errors.add(name)
@@ -1128,6 +1217,7 @@ class AnimationsTab(ft.Container):
     def _report_parse_errors(self) -> bool:
         if not self._parse_errors:
             return False
+
         self.set_status(
             f"Unparseable nodes: {', '.join(sorted(self._parse_errors))}", "red"
         )
@@ -1255,14 +1345,19 @@ class AnimationsTab(ft.Container):
                     _ = f.write(content)
                     f.flush()
                     os.fsync(f.fileno())
+
                 if os.path.exists(target):
                     os.chmod(tmp, os.stat(target).st_mode)
+
                 os.replace(tmp, target)
+
             except OSError:
                 try:
                     os.unlink(tmp)
+
                 except OSError:
                     pass
+
                 raise
 
         except OSError as e:
@@ -1283,4 +1378,5 @@ class AnimationsTab(ft.Container):
         self.set_state(animations_off, slowdown, selections, overrides)
         if not self._report_parse_errors():
             self.set_status("All changes reset", "gray")
+
         self.update()

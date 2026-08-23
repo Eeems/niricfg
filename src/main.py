@@ -25,7 +25,6 @@ def main(page: ft.Page) -> None:
             animations_tab.focus_keyboard()
 
     page.on_resize = lambda _: animations_tab.relayout()
-
     page.add(
         ft.Tabs(
             length=2,
@@ -51,15 +50,10 @@ def main(page: ft.Page) -> None:
             ),
         )
     )
-
     _ = monitors_tab.refresh()
     animations_tab.refresh()
-
-    # on_change only fires on a change; the first tab is selected at startup
-    # without an event, so give it keyboard focus explicitly.
     monitors_tab.focus_keyboard()
 
 
 if __name__ == "__main__":
-    # flet's run() is stubbed as returning Unknown; the result is discarded.
     _ = ft.run(main)  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]

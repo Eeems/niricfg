@@ -251,7 +251,7 @@ class SettingsPanel(ft.Container):
 
         self.scale_input.value = str(self.monitor.clamp_scale(self.scale_slider.value))
         self.scale_input.update()
-        self.monitor.monitor_scale = self.scale_slider.value
+        self.monitor.monitor_scale = self.scale_slider.value or 1.0
         self.monitor.pending.add("scale")
         self._on_scale_change(self.monitor.monitor_scale)
 

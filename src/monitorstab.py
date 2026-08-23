@@ -33,7 +33,6 @@ class MonitorsTab(ft.Container):
         self.canvas_min_x: int = 0
         self.canvas_min_y: int = 0
         self.outputs: dict[str, OutputData] = {}
-
         self.status_text: ft.Text = ft.Text("", size=14, color="gray")
         self.canvas: ft.Stack = ft.Stack(
             expand=True, on_size_change=self.on_canvas_resize
@@ -48,12 +47,10 @@ class MonitorsTab(ft.Container):
             on_apply=lambda m, e: self.on_apply(e),
             on_reset=self.on_reset,
         )
-
         self._armed: bool = False
         self._reset_armed: bool = False
         self._held_modifiers: set[str] = set()
         self._kb_listener: ft.KeyboardListener
-
         kb_listener = ft.KeyboardListener(
             autofocus=True,
             on_key_down=self.on_key_down,
@@ -81,7 +78,6 @@ class MonitorsTab(ft.Container):
             ),
         )
         self._kb_listener = kb_listener
-
         super().__init__(
             content=kb_listener,
             expand=True,
@@ -93,6 +89,7 @@ class MonitorsTab(ft.Container):
         for name in ("control", "shift", "alt", "meta"):
             if name in lower:
                 return name
+
         return None
 
     def on_key_down(self, e: ft.KeyDownEvent) -> None:
@@ -101,12 +98,15 @@ class MonitorsTab(ft.Container):
             self._held_modifiers.add(modifier)
             self._armed = False
             self._reset_armed = False
+
         elif e.key.lower() == "s":
             self._armed = self._held_modifiers == {"control"}
             self._reset_armed = False
+
         elif e.key.lower() == "z":
             self._reset_armed = self._held_modifiers == {"control"}
             self._armed = False
+
         else:
             self._armed = False
             self._reset_armed = False
@@ -115,9 +115,13 @@ class MonitorsTab(ft.Container):
         modifier = self._modifier_name(e.key)
         if modifier is not None:
             self._held_modifiers.discard(modifier)
-        elif e.key.lower() == "s" and self._armed and self._held_modifiers == {"control"}:
+
+        elif (
+            e.key.lower() == "s" and self._armed and self._held_modifiers == {"control"}
+        ):
             self._armed = False
             self.settings_panel.apply()
+
         elif (
             e.key.lower() == "z"
             and self._reset_armed
@@ -233,6 +237,7 @@ class MonitorsTab(ft.Container):
                 canvas_max_x = x + width
                 canvas_max_y = y + height
                 first = False
+
             else:
                 self.canvas_min_x = min(x, self.canvas_min_x)
                 self.canvas_min_y = min(y, self.canvas_min_y)
@@ -272,7 +277,6 @@ class MonitorsTab(ft.Container):
         monitor.height *= self.canvas_scale_factor
 
     def update_canvas_display(self) -> None:
-        """Update canvas without re-fetching from niri - just refreshes the display based on current data"""
         try:
             valid_outputs = list(self.outputs.keys())
             self.calculate_scaling_factor()
@@ -280,19 +284,18 @@ class MonitorsTab(ft.Container):
                 logical = cast(
                     dict[str, int | float | bool], output.get("logical") or {}
                 )
-
                 x = cast(int, logical.get("x", 0))
                 y = cast(int, logical.get("y", 0))
                 scale = cast(float, logical.get("scale", 1.0))
                 modes = cast(list[dict[str, int]], output.get("modes") or [])
                 current_mode = output.get("current_mode")
-                if isinstance(current_mode, int) and 0 <= current_mode < len(modes):
-                    mode = modes[current_mode]
-                else:
-                    mode = {}
+                mode = (
+                    modes[current_mode]
+                    if isinstance(current_mode, int) and 0 <= current_mode < len(modes)
+                    else {}
+                )
                 width = mode.get("width", 1920)
                 height = mode.get("height", 1080)
-
                 monitor = self.get_monitor(name)
                 if monitor is None:
                     monitor = Monitor(
@@ -307,25 +310,26 @@ class MonitorsTab(ft.Container):
                         on_layout=self.layout_monitor,
                     )
                     self.canvas.controls.append(monitor)
+                    continue
 
-                else:
-                    if "scale" not in monitor.pending:
-                        monitor.monitor_scale = scale
+                if "scale" not in monitor.pending:
+                    monitor.monitor_scale = scale
 
-                    if "resolution" not in monitor.pending:
-                        monitor.resolution = (width, height)
+                if "resolution" not in monitor.pending:
+                    monitor.resolution = (width, height)
 
-                    if "position" not in monitor.pending:
-                        monitor.position = (x, y)
+                if "position" not in monitor.pending:
+                    monitor.position = (x, y)
 
-                    if "vrr" not in monitor.pending:
-                        monitor.vrr = cast(bool, output.get("vrr_enabled", False))
+                if "vrr" not in monitor.pending:
+                    monitor.vrr = cast(bool, output.get("vrr_enabled", False))
 
             for monitor in cast(list[Monitor], list(self.canvas.controls)):
                 if monitor.name not in valid_outputs:
                     if monitor.name == self.selected_monitor_name:
                         self.selected_monitor_name = None
                         self.settings_panel.monitor = None
+
                     self.canvas.controls.remove(monitor)
 
         except Exception as e:
@@ -362,8 +366,6 @@ class MonitorsTab(ft.Container):
             return
 
         try:
-            # Get available modes and populate dropdown. Sort a copy so the
-            # original modes list keeps its order for current_mode indexing.
             modes = sorted(
                 cast(list[dict[str, int]], output.get("modes", [])),
                 key=lambda m: (m["width"], m["height"]),
@@ -376,6 +378,7 @@ class MonitorsTab(ft.Container):
                 if mode_str not in seen:
                     seen.add(mode_str)
                     mode_options.append(ft.dropdown.Option(mode_str))
+
             self.settings_panel.resolution_dropdown.options = mode_options
             w, h = monitor.resolution
             self.settings_panel.resolution_dropdown.value = f"{w}x{h}"
@@ -389,22 +392,28 @@ class MonitorsTab(ft.Container):
             self.settings_panel.update()
             monitor.update()
             self.update_display()
+
         except Exception as e:
             traceback.print_exc()
             self.set_status(f"Error: {e}", "red")
             self.page.schedule_update()
 
     def get_primary_monitor(self) -> str | None:
+        if not os.path.exists(CONFIG_PATH):
+            return None
+
         try:
-            if os.path.exists(CONFIG_PATH):
-                with open(CONFIG_PATH) as f:
-                    doc = kdl.parse(f.read())
-                    for node in doc.nodes:
-                        if node.name == "output" and node.args:
-                            name = str(cast(object, node.args[0]))
-                            for child in node.nodes:
-                                if child.name == "focus-at-startup":
-                                    return name
+            with open(CONFIG_PATH) as f:
+                doc = kdl.parse(f.read())
+                for node in doc.nodes:
+                    if node.name != "output" or not node.args:
+                        continue
+
+                    name = str(cast(object, node.args[0]))
+                    for child in node.nodes:
+                        if child.name == "focus-at-startup":
+                            return name
+
         except Exception:
             traceback.print_exc()
 
@@ -418,8 +427,10 @@ class MonitorsTab(ft.Container):
             try:
                 with open(CONFIG_PATH) as f:
                     kdl_config = kdl.parse(f.read())
+
             except FileNotFoundError:
                 kdl_config = kdl.Document()
+
             except Exception:
                 traceback.print_exc()
                 raise
@@ -459,8 +470,10 @@ class MonitorsTab(ft.Container):
                 ]
                 if monitor.vrr:
                     nodes.append(kdl.Node(name="variable-refresh-rate"))
+
                 if monitor.primary:
                     nodes.append(kdl.Node(name="focus-at-startup"))
+
                 node.nodes.extend(nodes)
 
             fd, tmp = tempfile.mkstemp(
@@ -473,14 +486,19 @@ class MonitorsTab(ft.Container):
                     _ = f.write(kdl_config.print())
                     f.flush()
                     os.fsync(f.fileno())
+
                 if os.path.exists(CONFIG_PATH):
                     os.chmod(tmp, os.stat(CONFIG_PATH).st_mode)
+
                 os.replace(tmp, CONFIG_PATH)
+
             except Exception:
                 try:
                     os.unlink(tmp)
+
                 except OSError:
                     pass
+
                 raise
 
             return True
@@ -505,10 +523,13 @@ class MonitorsTab(ft.Container):
     def on_reset(self, monitor: Monitor | None = None) -> None:
         if monitor is None:
             monitor = self.get_monitor(self.selected_monitor_name or "")
+
         if monitor is None:
             return
+
         if "primary" in monitor.pending:
             self.primary_monitor_name = self.get_primary_monitor()
+
         monitor.reset()
         self.set_status("All changes reset", "gray")
         self.update_canvas_display()
