@@ -619,6 +619,20 @@ class AnimationsTab(ft.Container):
         return None
 
     def extract_animation_node_text(self, name: str, path: str) -> str | None:
+        """
+        Extract raw animation node text from preset file.
+
+        The parsed KDL structure loses formatting info like comments and blank lines.
+        We need the original text to preserve it when applying overrides later in
+        write_animations_kdl().
+
+        Args:
+            name: Animation node name
+            path: Relative path to preset file
+
+        Returns:
+            Raw animation node KDL text, or None if file not found/unparseable
+        """
         try:
             with open(self.resolve_preset_path(path)) as f:
                 text = f.read()
@@ -1057,6 +1071,21 @@ class AnimationsTab(ft.Container):
     def override_animation_node_text(
         self, name: str, text: str, config: AnimationConfig
     ) -> str | None:
+        """
+        Insert override values into original animation node text.
+
+        The parsed KDL structure loses formatting info like comments and blank lines.
+        We need the raw text to preserve it when inserting overrides at specific positions
+        in the file structure.
+
+        Args:
+            name: Animation node name
+            text: Original animation node KDL text from preset file
+            config: User's override values to insert
+
+        Returns:
+            Modified KDL text with overrides inserted, or None if invalid
+        """
         lines = text.splitlines()
         if not lines:
             return None
